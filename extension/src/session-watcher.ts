@@ -418,14 +418,14 @@ export class SessionWatcher implements AgentSessionWatcher {
 
     const stat = fs.statSync(filePath)
 
-    // Pre-scan existing content for dedup IDs + collect recent entries for catch-up
-    const catchUpEntries = this.parser.prescanExistingContent(filePath, stat.size, session)
+    // Pre-scan older history for dedup IDs; keep the recent turns for replay
+    const { entries, replayLines } = this.parser.prepareBackfill(filePath, stat.size, session)
 
     // Start from current end — only process NEW events going forward
     session.fileSize = stat.size
 
-    // Extract session label from the first user message in catch-up entries
-    this.parser.extractSessionLabel(catchUpEntries, session)
+    // Extract session label from the first user message in pre-scanned entries
+    this.parser.extractSessionLabel(entries, session)
 
     // Emit session start
     this._onSessionDetected.fire(sessionId)
@@ -446,10 +446,9 @@ export class SessionWatcher implements AgentSessionWatcher {
     // Emit initial context breakdown from prescan so the webview shows accumulated tokens
     this.emitContextUpdate(ORCHESTRATOR_NAME, session, sessionId)
 
-    // Emit catch-up messages for content that was already in the file when we detected
-    // the session (e.g. the first user message). These were pre-scanned for dedup/tokens
-    // but never emitted as events. Emit them now so the webview shows the full history.
-    this.parser.emitCatchUpEntries(catchUpEntries, session, sessionId)
+    // Replay the recent turns through the live path so the webview shows
+    // tool calls, subagents and messages that happened before we attached.
+    this.parser.replayLines(replayLines, session, sessionId)
 
     // Watch for new content
     session.fileWatcher = fs.watch(filePath, (eventType) => {
@@ -565,7 +564,7 @@ export class SessionWatcher implements AgentSessionWatcher {
     if (sessionId) {
       const session = this.sessions.get(sessionId)
       if (session) {
-        return (Date.now() - session.sessionStartTime) / 1000
+        return ((session.replayNow ?? Date.now()) - session.sessionStartTime) / 1000
       }
     }
     return 0
