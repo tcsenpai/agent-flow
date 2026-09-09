@@ -500,18 +500,12 @@ export async function createRelay(options: RelayOptions): Promise<Relay> {
         sendSSE(res, { type: 'session-list', sessions: sessionList })
       }
 
-      // Replay buffered events for the most recent active session
-      const sorted = [...sessionList].sort((a, b) => {
-        const aActive = a.status === 'active' ? 1 : 0
-        const bActive = b.status === 'active' ? 1 : 0
-        if (aActive !== bActive) return bActive - aActive
-        return b.lastActivityTime - a.lastActivityTime
-      })
-      if (sorted.length > 0) {
-        const buffered = eventBuffer.get(sorted[0].id)
-        if (buffered) {
-          sendSSE(res, { type: 'agent-event-batch', events: buffered })
-        }
+      // Replay buffered events for every session — the frontend buffers them
+      // per session and flushes on selection, so switching tabs shows history
+      // even for sessions attached before this client connected.
+      for (const s of sessionList) {
+        const buffered = eventBuffer.get(s.id)
+        if (buffered) sendSSE(res, { type: 'agent-event-batch', events: buffered })
       }
     },
 

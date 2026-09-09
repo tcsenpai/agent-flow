@@ -456,8 +456,13 @@ export class TranscriptParser {
       log.error('Pre-scan failed:', err)
       return { entries: [], replayLines: [] }
     }
-    const firstTs = lineTimestamp(lines[0])
-    if (firstTs) { session.sessionStartTime = firstTs }
+    // First line WITH a timestamp — sessions start with ai-title/mode/summary lines that carry none.
+    // Without this the replay clock would be "now", elapsed() negative, and the
+    // frontend would collapse every replayed event onto the same instant.
+    for (const line of lines) {
+      const ts = lineTimestamp(line)
+      if (ts) { session.sessionStartTime = ts; break }
+    }
     let split = lines.length
     for (let i = lines.length - 1, turns = 0; i >= 0 && turns < BACKFILL_TURNS; i--) {
       if (isUserTurnLine(lines[i])) { turns++; split = i }
