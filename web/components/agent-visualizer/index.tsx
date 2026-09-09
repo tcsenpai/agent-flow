@@ -477,6 +477,7 @@ export function AgentVisualizer() {
         onToggleMute={handleToggleMute}
         isExporting={timelineExport.isExporting}
         exportProgress={timelineExport.progress}
+        exportResult={timelineExport.lastResult}
         onToggleExport={handleToggleExport}
       />
 
