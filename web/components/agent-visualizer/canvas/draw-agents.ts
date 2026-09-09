@@ -3,7 +3,7 @@ import { COLORS, getStateColor, contextSegments } from '@/lib/colors'
 import {
   AGENT_DRAW, CONTEXT_BAR, CONTEXT_RING, STATS_OVERLAY,
 } from '@/lib/canvas-constants'
-import { alphaHex, formatTokens } from '@/lib/utils'
+import { alphaHex, formatTokens, getModelColor } from '@/lib/utils'
 import { truncateText, drawHexagon, CLAUDE_SPARK_D, OPENAI_LOGO_D, OPENAI_LOGO_VIEWBOX, drawPolygon, agentSides } from './draw-misc'
 import { getAgentGlowSprite } from './render-cache'
 
@@ -342,7 +342,10 @@ export function drawAgents(
 ) {
   for (const [id, agent] of agents) {
     const radius = agent.isMain ? NODE.radiusMain : NODE.radiusSub
-    const color = getStateColor(agent.state)
+    // Model family colors the node; alert states (error, paused, waiting) keep their state color
+    const modelColor = getModelColor(agent.model)
+    const alert = agent.state === 'error' || agent.state === 'paused' || agent.state === 'waiting_permission'
+    const color = modelColor && !alert ? modelColor : getStateColor(agent.state)
     const isHovered = id === hoveredAgentId
     const isSelected = id === selectedAgentId
 
