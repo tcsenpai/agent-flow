@@ -104,6 +104,9 @@ export interface TopBarProps {
   onToggleMute: () => void
   autoFit: boolean
   onToggleAutoFit: () => void
+  isExporting: boolean
+  exportProgress: number
+  onToggleExport: () => void
 }
 
 export const TopBar = memo(function TopBar({
@@ -115,6 +118,7 @@ export const TopBar = memo(function TopBar({
   showFileAttention, showTranscript, showCostOverlay, showTimeline, isMuted,
   onTogglePanel, onToggleTimeline, onToggleMute,
   autoFit, onToggleAutoFit,
+  isExporting, exportProgress, onToggleExport,
 }: TopBarProps) {
   return (
     <div className="absolute top-3 left-3 right-3 flex items-center gap-4 font-mono text-[10px]" style={{ zIndex: Z.info }}>
@@ -174,6 +178,14 @@ export const TopBar = memo(function TopBar({
         {/* Independent toggles */}
         <ToggleButton active={showTimeline} onClick={onToggleTimeline}>Timeline</ToggleButton>
         <ToggleButton active={autoFit} onClick={onToggleAutoFit} style={{ border: `1px solid ${COLORS.toggleBorder}` }}>Auto-fit</ToggleButton>
+        <ToggleButton
+          active={isExporting}
+          onClick={onToggleExport}
+          activeColor={{ bg: COLORS.costActiveBg, text: COLORS.error }}
+          style={{ border: `1px solid ${COLORS.toggleBorder}` }}
+        >
+          {isExporting ? `● REC ${Math.round(exportProgress * 100)}%` : 'Export'}
+        </ToggleButton>
         <ToggleButton active={!isMuted} onClick={onToggleMute} style={{ border: `1px solid ${COLORS.toggleBorder}` }}>
           {isMuted ? <MutedIcon /> : <UnmutedIcon />}
         </ToggleButton>

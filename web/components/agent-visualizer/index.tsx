@@ -27,6 +27,7 @@ import { SessionManagerModal } from './session-manager-modal'
 import { useSessionNames } from '@/hooks/use-session-names'
 import { shouldShowFolder } from '@/lib/session-label'
 import { AUTOFIT_PREF_KEY } from "@/lib/canvas-constants"
+import { useTimelineExport } from "@/hooks/use-timeline-export"
 import { useAudioEffects } from "@/hooks/use-audio-effects"
 
 export function AgentVisualizer() {
@@ -51,6 +52,7 @@ export function AgentVisualizer() {
     restart,
     setSpeed,
     seekToTime,
+    skipTo,
     updateAgentPosition,
     saveSnapshot,
     restoreSnapshot,
@@ -96,7 +98,9 @@ export function AgentVisualizer() {
   }, [])
 
   const [isReviewing, setIsReviewing] = useState(false)
-  const { isMuted, seekingRef, handleToggleMute } = useAudioEffects(agents, toolCalls, isReviewing)
+  const [isExporting, setIsExporting] = useState(false)
+  const [exportOverlay, setExportOverlay] = useState<string | null>(null)
+  const { isMuted, seekingRef, handleToggleMute, audioRef } = useAudioEffects(agents, toolCalls, isReviewing, isExporting)
 
   // Auto-play on mount
   useEffect(() => {
@@ -206,6 +210,25 @@ export function AgentVisualizer() {
     restart(true)
   }, [restart])
 
+  const timelineExport = useTimelineExport({
+    getCanvas: () => document.querySelector<HTMLCanvasElement>('canvas[data-agent-canvas]'),
+    getAudioStream: () => audioRef.current?.recordingStream() ?? null,
+    getCurrentTime: () => frameRef.current.currentTime,
+    getMaxTime: () => frameRef.current.maxTimeReached,
+    getNextEventTime: () => {
+      const st = frameRef.current
+      return st.eventIndex < st.eventLog.length ? st.eventLog[st.eventIndex].time : null
+    },
+    seekToTime, skipTo, play, pause,
+    setOverlay: setExportOverlay,
+    onDone: handleResumeLive,
+  })
+  useEffect(() => { setIsExporting(timelineExport.isExporting) }, [timelineExport.isExporting])
+  const handleToggleExport = useCallback(() => {
+    if (timelineExport.isExporting) timelineExport.cancelExport()
+    else { setIsReviewing(true); timelineExport.startExport() }
+  }, [timelineExport])
+
   // Keyboard shortcuts
   const keyboardActions = useMemo(() => ({
     togglePlayPause: handlePlayPause,
@@ -314,6 +337,7 @@ export function AgentVisualizer() {
         onDiscoveryClick={selection.handleDiscoveryClick}
         selectedDiscoveryId={selection.selectedDiscoveryId}
         showCostOverlay={showCostOverlay}
+        overlayText={exportOverlay}
       />
 
       {/* Message feed panel (top-left) */}
@@ -451,6 +475,9 @@ export function AgentVisualizer() {
         autoFit={autoFit}
         onToggleAutoFit={toggleAutoFit}
         onToggleMute={handleToggleMute}
+        isExporting={timelineExport.isExporting}
+        exportProgress={timelineExport.progress}
+        onToggleExport={handleToggleExport}
       />
 
       <SessionManagerModal
