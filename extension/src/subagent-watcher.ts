@@ -20,6 +20,9 @@ import { createLogger } from './logger'
 
 const log = createLogger('SubagentWatcher')
 
+/** A subagent transcript written within this window counts as active on attach */
+const RECENT_SUBAGENT_WRITE_MS = 60 * 1000
+
 export interface SubagentWatcherDelegate extends PermissionDetectionDelegate {
   getSession(sessionId: string): WatchedSession | undefined
   resetInactivityTimer(sessionId: string): void
@@ -140,9 +143,15 @@ function startWatchingSubagentFile(
 
   // Only emit spawn for subagents that are still active (have pending work)
   // AND haven't already been spawned by the transcript parser.
+  // An agent is considered active if it has pending work OR wrote to its
+  // transcript very recently (e.g. it is thinking between tool calls) — otherwise
+  // agents attached mid-run only appear at their next tool call.
+  let recentlyActive = false
+  try { recentlyActive = Date.now() - fs.statSync(filePath).mtimeMs < RECENT_SUBAGENT_WRITE_MS } catch { /* ignore */ }
+  const isActive = pendingToolUseIds.size > 0 || recentlyActive
   const alreadySpawned = session.spawnedSubagents.has(agentName)
-  state.spawnEmitted = pendingToolUseIds.size > 0 || alreadySpawned
-  if (pendingToolUseIds.size > 0 && !alreadySpawned) {
+  state.spawnEmitted = isActive || alreadySpawned
+  if (isActive && !alreadySpawned) {
     session.spawnedSubagents.add(agentName)
     emitSubagentSpawn(delegate, ORCHESTRATOR_NAME, agentName, agentName, sessionId)
   }
