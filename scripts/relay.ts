@@ -227,8 +227,9 @@ function watchSession(sessionId: string, filePath: string) {
   })
   session.sessionDetected = true
 
-  emitContextUpdate(ORCHESTRATOR_NAME, session, sessionId)
   parser.replayLines(replayLines, session, sessionId)
+  parser.advanceClock(session, Date.now()) // compress the gap between last entry and now
+  emitContextUpdate(ORCHESTRATOR_NAME, session, sessionId)
 
   session.fileWatcher = fs.watch(filePath, (eventType) => {
     if (eventType === 'change') readNewLines(sessionId)
@@ -256,6 +257,7 @@ function readNewLines(sessionId: string) {
   const result = readNewFileLines(session.filePath, session.fileSize)
   if (!result) return
   session.fileSize = result.newSize
+  if (result.lines.length > 0) parser.advanceClock(session, Date.now())
   for (const line of result.lines) {
     parser.processTranscriptLine(line, ORCHESTRATOR_NAME, session.pendingToolCalls, session.seenToolUseIds, sessionId, session.seenMessageHashes)
   }
