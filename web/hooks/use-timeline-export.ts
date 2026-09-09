@@ -54,9 +54,38 @@ function pickMimeType(): { mime: string; ext: string } {
  * fed from canvas.captureStream() + the AudioEngine's recording output.
  * Playback speed is whatever the simulation is set to.
  */
+/** Save a blob: native "Save as" dialog where available (user picks folder + name), otherwise a download */
+async function saveBlob(blob: Blob, suggestedName: string, ext: string): Promise<string> {
+  const picker = (window as unknown as { showSaveFilePicker?: (o: unknown) => Promise<FileSystemFileHandle> }).showSaveFilePicker
+  if (picker) {
+    try {
+      const handle = await picker({
+        suggestedName,
+        types: [{ description: ext.toUpperCase() + ' video', accept: { [blob.type || `video/${ext}`]: [`.${ext}`] } }],
+      })
+      const w = await handle.createWritable()
+      await w.write(blob)
+      await w.close()
+      return `Saved as ${handle.name}`
+    } catch (err) {
+      if ((err as { name?: string }).name === 'AbortError') return 'Export cancelled (not saved)'
+      // Picker unavailable in this context — fall through to a plain download
+    }
+  }
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = suggestedName
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(url), 10_000)
+  return `Saved ${suggestedName} to your browser's Downloads folder`
+}
+
 export function useTimelineExport(opts: ExportOptions) {
   const [isExporting, setIsExporting] = useState(false)
   const [progress, setProgress] = useState(0)
+  /** Human-readable outcome of the last export, cleared after a few seconds */
+  const [lastResult, setLastResult] = useState<string | null>(null)
   const recorderRef = useRef<MediaRecorder | null>(null)
   const rafRef = useRef(0)
   const discardRef = useRef(false)
@@ -93,12 +122,11 @@ export function useTimelineExport(opts: ExportOptions) {
       setProgress(0)
       if (!discardRef.current && chunks.length > 0) {
         const blob = new Blob(chunks, { type: recorder.mimeType || mime })
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `agent-flow-${new Date().toISOString().replace(/[:.]/g, '-')}.${ext}`
-        a.click()
-        setTimeout(() => URL.revokeObjectURL(url), 10_000)
+        const name = `agent-flow-${new Date().toISOString().replace(/[:.]/g, '-')}.${ext}`
+        saveBlob(blob, name, ext).then(msg => {
+          setLastResult(`${msg} (${(blob.size / 1_048_576).toFixed(1)} MB)`)
+          setTimeout(() => setLastResult(null), 12_000)
+        })
       }
       optsRef.current.onDone?.()
     }
@@ -143,5 +171,5 @@ export function useTimelineExport(opts: ExportOptions) {
 
   useEffect(() => () => { cancelAnimationFrame(rafRef.current); recorderRef.current?.stop() }, [])
 
-  return { isExporting, progress, startExport: start, cancelExport: () => stop(true) }
+  return { isExporting, progress, lastResult, startExport: start, cancelExport: () => stop(true) }
 }
