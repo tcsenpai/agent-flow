@@ -475,18 +475,25 @@ export class TranscriptParser {
   /** Replay historical lines through the live path, with the session clock
    *  pinned to each entry's own timestamp so durations and the timeline are real. */
   replayLines(lines: string[], session: WatchedSession, sessionId: string): void {
-    let prevTs: number | null = null
     for (const line of lines) {
       const ts = lineTimestamp(line)
-      // Compress idle gaps: elapsed() subtracts compressedMs, for replayed and live events alike
-      if (ts && prevTs && ts - prevTs > MAX_REPLAY_GAP_MS) {
-        session.compressedMs = (session.compressedMs ?? 0) + (ts - prevTs - MAX_REPLAY_GAP_MS)
-      }
-      if (ts) prevTs = ts
+      if (ts) this.advanceClock(session, ts)
       session.replayNow = ts
       this.processTranscriptLine(line, ORCHESTRATOR_NAME, session.pendingToolCalls, session.seenToolUseIds, sessionId, session.seenMessageHashes)
     }
     session.replayNow = null
+  }
+
+  /** Move the session clock to `wallMs`, compressing any idle gap longer than
+   *  MAX_REPLAY_GAP_MS. elapsed() subtracts compressedMs, so replayed and live
+   *  events share one continuous timeline without dead time. Call before
+   *  processing new lines, both during replay and live. */
+  advanceClock(session: WatchedSession, wallMs: number): void {
+    const last = session.lastEventWall
+    if (last && wallMs - last > MAX_REPLAY_GAP_MS) {
+      session.compressedMs = (session.compressedMs ?? 0) + (wallMs - last - MAX_REPLAY_GAP_MS)
+    }
+    if (!last || wallMs > last) session.lastEventWall = wallMs
   }
 
   /** Build dedup sets and accumulate token counts for lines that will NOT be emitted. */

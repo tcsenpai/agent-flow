@@ -443,12 +443,16 @@ export class SessionWatcher implements AgentSessionWatcher {
     }, sessionId)
     session.sessionDetected = true
 
-    // Emit initial context breakdown from prescan so the webview shows accumulated tokens
-    this.emitContextUpdate(ORCHESTRATOR_NAME, session, sessionId)
-
     // Replay the recent turns through the live path so the webview shows
     // tool calls, subagents and messages that happened before we attached.
+    // Must come before any elapsed()-timed event: the clock is only compressed
+    // as the replay advances, and an early event at "now" would push the
+    // frontend clock past every replayed one.
     this.parser.replayLines(replayLines, session, sessionId)
+    this.parser.advanceClock(session, Date.now()) // compress the gap between last entry and now
+
+    // Emit context breakdown so the webview shows accumulated tokens
+    this.emitContextUpdate(ORCHESTRATOR_NAME, session, sessionId)
 
     // Watch for new content
     session.fileWatcher = fs.watch(filePath, (eventType) => {
@@ -483,6 +487,7 @@ export class SessionWatcher implements AgentSessionWatcher {
     const result = readNewFileLines(session.filePath, session.fileSize)
     if (!result) return
     session.fileSize = result.newSize
+    if (result.lines.length > 0) this.parser.advanceClock(session, Date.now())
     for (const line of result.lines) {
       this.parser.processTranscriptLine(line, ORCHESTRATOR_NAME, session.pendingToolCalls, session.seenToolUseIds, sessionId, session.seenMessageHashes)
     }
