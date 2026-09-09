@@ -3,6 +3,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { COLORS } from '@/lib/colors'
 import type { SessionInfo } from '@/lib/vscode-bridge'
+import { sessionDisplayLabel } from '@/lib/session-label'
 
 interface SessionTabsProps {
   sessions: SessionInfo[]
@@ -12,16 +13,8 @@ interface SessionTabsProps {
   onCloseSession: (id: string) => void
   /** Prefix tab labels with the session's folder name (standalone app, or multiple workspaces) */
   showFolder: boolean
-}
-
-const RENAME_STORAGE_KEY = 'agent-flow-session-names'
-
-function loadCustomNames(): Record<string, string> {
-  try { return JSON.parse(localStorage.getItem(RENAME_STORAGE_KEY) || '{}') } catch { return {} }
-}
-
-function folderName(cwd: string): string {
-  return cwd.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || cwd
+  customNames: Record<string, string>
+  onRenameSession: (id: string, name: string) => void
 }
 
 export function SessionTabs({
@@ -31,28 +24,22 @@ export function SessionTabs({
   onSelectSession,
   onCloseSession,
   showFolder,
+  customNames,
+  onRenameSession,
 }: SessionTabsProps) {
   const buttonRefs = useRef<Map<string, HTMLButtonElement>>(new Map())
-  const [customNames, setCustomNames] = useState<Record<string, string>>(loadCustomNames)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
 
   const commitRename = useCallback((id: string, name: string) => {
-    setCustomNames(prev => {
-      const next = { ...prev }
-      if (name.trim()) next[id] = name.trim()
-      else delete next[id] // empty name = reset to default label
-      try { localStorage.setItem(RENAME_STORAGE_KEY, JSON.stringify(next)) } catch { /* ignore */ }
-      return next
-    })
+    onRenameSession(id, name)
     setEditingId(null)
-  }, [])
+  }, [onRenameSession])
 
-  const displayLabel = useCallback((session: SessionInfo) => {
-    const custom = customNames[session.id]
-    if (custom) return custom
-    return showFolder && session.cwd ? `${folderName(session.cwd)} · ${session.label}` : session.label
-  }, [customNames, showFolder])
+  const displayLabel = useCallback(
+    (session: SessionInfo) => sessionDisplayLabel(session, customNames[session.id], showFolder),
+    [customNames, showFolder],
+  )
 
   const setButtonRef = useCallback((id: string, el: HTMLButtonElement | null) => {
     if (el) buttonRefs.current.set(id, el)
