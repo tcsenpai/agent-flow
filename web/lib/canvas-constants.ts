@@ -122,6 +122,9 @@ export const AUTO_SCROLL_THRESHOLD = 60
 
 // ─── Camera / interaction constants ─────────────────────────────────────────
 
+/** localStorage key for the auto-fit camera preference */
+export const AUTOFIT_PREF_KEY = 'agent-flow-autofit'
+
 export const CAMERA = {
   zoomStepDown: 0.92,
   zoomStepUp: 1.08,
