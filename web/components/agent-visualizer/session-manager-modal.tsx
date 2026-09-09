@@ -39,7 +39,15 @@ export function SessionManagerModal({
 
   useEffect(() => {
     if (!visible) return
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); onClose() } }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      e.stopPropagation()
+      // Escape while renaming only cancels the edit; a second Escape closes the modal
+      setEditingId(current => {
+        if (current === null) onClose()
+        return null
+      })
+    }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
   }, [visible, onClose])
@@ -93,9 +101,8 @@ export function SessionManagerModal({
                     background: isSelected ? COLORS.tabSelectedBg : 'transparent',
                     border: `1px solid ${isSelected ? COLORS.tabSelectedBorder : 'transparent'}`,
                   }}
-                  onClick={() => { onSelectSession(session.id); onClose() }}
-                  onDoubleClick={(e) => { e.stopPropagation(); setDraft(customNames[session.id] ?? ''); setEditingId(session.id) }}
-                  title="Click to open · double-click to rename"
+                  onClick={() => { if (editingId !== session.id) { onSelectSession(session.id); onClose() } }}
+                  title="Click to open · ✎ to rename"
                 >
                   <span
                     className="inline-block w-1.5 h-1.5 rounded-full flex-shrink-0"
