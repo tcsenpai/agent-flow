@@ -38,7 +38,7 @@ export const BACKFILL_TURNS = 50
 /** Idle gaps between replayed transcript entries longer than this are
  *  compressed down to this length, so a session that sat idle for hours
  *  does not produce a timeline made mostly of dead time. */
-export const MAX_REPLAY_GAP_MS = 30 * 1000
+export const MAX_REPLAY_GAP_MS = 5 * 1000
 
 /** Duration of VS Code status bar messages (ms) */
 export const STATUS_MESSAGE_DURATION_MS = 5000
