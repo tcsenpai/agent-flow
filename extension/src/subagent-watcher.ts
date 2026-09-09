@@ -61,15 +61,28 @@ export function scanSubagentsDir(
   const subDir = session.subagentsDir
   if (!fs.existsSync(subDir)) return
 
+  // Workflow tool agents live one level deeper: subagents/workflows/<run-id>/agent-*.jsonl.
+  // The dir watcher above is not recursive, but the poll fallback re-scans, so new
+  // workflow runs are picked up within POLL_FALLBACK_MS.
+  const dirs = [subDir]
+  const workflowsDir = path.join(subDir, 'workflows')
   try {
-    const files = fs.readdirSync(subDir)
-    for (const file of files) {
-      if (!file.endsWith('.jsonl')) continue
-      const filePath = path.join(subDir, file)
-      if (session.subagentWatchers.has(filePath)) continue
-      startWatchingSubagentFile(delegate, parser, filePath, sessionId)
+    if (fs.existsSync(workflowsDir)) {
+      for (const run of fs.readdirSync(workflowsDir)) dirs.push(path.join(workflowsDir, run))
     }
-  } catch (err) { log.debug('Subagent dir scan failed:', err) }
+  } catch (err) { log.debug('Workflow dir scan failed:', err) }
+
+  for (const dir of dirs) {
+    try {
+      const files = fs.readdirSync(dir)
+      for (const file of files) {
+        if (!file.endsWith('.jsonl')) continue
+        const filePath = path.join(dir, file)
+        if (session.subagentWatchers.has(filePath)) continue
+        startWatchingSubagentFile(delegate, parser, filePath, sessionId)
+      }
+    } catch (err) { log.debug('Subagent dir scan failed:', err) }
+  }
 }
 
 function startWatchingSubagentFile(
