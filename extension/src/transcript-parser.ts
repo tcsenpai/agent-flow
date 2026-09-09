@@ -465,6 +465,10 @@ export class TranscriptParser {
       const ts = lineTimestamp(line)
       if (ts) { session.sessionStartTime = ts; break }
     }
+    // Seed the gap-compression clock at session start, so the stretch covered
+    // by pre-scanned (not replayed) turns collapses too instead of showing up
+    // as thousands of empty minutes before the first replayed event.
+    session.lastEventWall = session.sessionStartTime
     let split = lines.length
     for (let i = lines.length - 1, turns = 0; i >= 0 && turns < BACKFILL_TURNS; i--) {
       if (isUserTurnLine(lines[i])) { turns++; split = i }
