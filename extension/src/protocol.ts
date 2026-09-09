@@ -198,6 +198,8 @@ export interface WatchedSession {
   compressedMs?: number
   /** Wall-clock ms of the last processed transcript entry, for gap compression */
   lastEventWall?: number
+  /** Last value returned by elapsed(); events are never stamped earlier than this */
+  lastElapsed?: number
   model: string | null
   /** Maps agent names to their last emitted model ID — re-emits on model change */
   modelDetectedAgents: Map<string, string>

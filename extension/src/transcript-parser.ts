@@ -38,11 +38,20 @@ export interface TranscriptParserDelegate {
   emitContextUpdate(agentName: string, session: WatchedSession, sessionId?: string): void
 }
 
-/** Wall-clock ms of a transcript line, without a full JSON parse. */
+/** Line types whose top-level timestamp reflects conversation time. Other lines
+ *  (file-history-snapshot, queue-operation, attachment...) carry nested or
+ *  out-of-order timestamps and must not drive the clock. */
+const CLOCK_LINE_TYPES = new Set(['user', 'assistant', 'progress', 'system'])
+
+/** Wall-clock ms of a conversation transcript line (top-level `timestamp` only). */
 function lineTimestamp(line: string | undefined): number | null {
-  const m = line?.match(/"timestamp":"([^"]+)"/)
-  const ts = m ? Date.parse(m[1]) : NaN
-  return Number.isNaN(ts) ? null : ts
+  if (!line || !line.includes('"timestamp"')) return null
+  try {
+    const parsed = JSON.parse(line) as { type?: unknown; timestamp?: unknown }
+    if (typeof parsed.type !== 'string' || !CLOCK_LINE_TYPES.has(parsed.type)) return null
+    const ts = typeof parsed.timestamp === 'string' ? Date.parse(parsed.timestamp) : NaN
+    return Number.isNaN(ts) ? null : ts
+  } catch { return null }
 }
 
 /** ponytail: string sniff instead of JSON.parse — tool_result entries are also type "user", exclude them */
@@ -482,7 +491,9 @@ export class TranscriptParser {
     for (const line of lines) {
       const ts = lineTimestamp(line)
       if (ts) this.advanceClock(session, ts)
-      session.replayNow = ts
+      // Transcript lines are not strictly ordered (queued messages, attachments);
+      // never let the replay clock move backwards
+      session.replayNow = ts ? Math.max(ts, session.lastEventWall ?? ts) : session.lastEventWall ?? null
       this.processTranscriptLine(line, ORCHESTRATOR_NAME, session.pendingToolCalls, session.seenToolUseIds, sessionId, session.seenMessageHashes)
     }
     session.replayNow = null
@@ -493,6 +504,7 @@ export class TranscriptParser {
    *  events share one continuous timeline without dead time. Call before
    *  processing new lines, both during replay and live. */
   advanceClock(session: WatchedSession, wallMs: number): void {
+    wallMs = Math.min(wallMs, Date.now()) // a bogus future timestamp must not stall the clock
     const last = session.lastEventWall
     if (last && wallMs - last > MAX_REPLAY_GAP_MS) {
       session.compressedMs = (session.compressedMs ?? 0) + (wallMs - last - MAX_REPLAY_GAP_MS)
