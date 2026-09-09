@@ -120,7 +120,7 @@ const sessions = new Map<string, WatchedSession>()
 function elapsed(sessionId?: string): number {
   if (sessionId) {
     const session = sessions.get(sessionId)
-    if (session) return ((session.replayNow ?? Date.now()) - session.sessionStartTime) / 1000
+    if (session) return ((session.replayNow ?? Date.now()) - session.sessionStartTime - (session.compressedMs ?? 0)) / 1000
   }
   return 0
 }

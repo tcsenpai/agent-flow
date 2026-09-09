@@ -22,6 +22,7 @@ import {
   generateSubagentFallbackName,
   resolveSubagentChildName,
   BACKFILL_TURNS,
+  MAX_REPLAY_GAP_MS,
 } from './constants'
 import { summarizeInput, summarizeResult, extractInputData, detectError, buildDiscovery } from './tool-summarizer'
 import { estimateTokensFromContent, estimateTokensFromText } from './token-estimator'
@@ -473,8 +474,15 @@ export class TranscriptParser {
   /** Replay historical lines through the live path, with the session clock
    *  pinned to each entry's own timestamp so durations and the timeline are real. */
   replayLines(lines: string[], session: WatchedSession, sessionId: string): void {
+    let prevTs: number | null = null
     for (const line of lines) {
-      session.replayNow = lineTimestamp(line)
+      const ts = lineTimestamp(line)
+      // Compress idle gaps: elapsed() subtracts compressedMs, for replayed and live events alike
+      if (ts && prevTs && ts - prevTs > MAX_REPLAY_GAP_MS) {
+        session.compressedMs = (session.compressedMs ?? 0) + (ts - prevTs - MAX_REPLAY_GAP_MS)
+      }
+      if (ts) prevTs = ts
+      session.replayNow = ts
       this.processTranscriptLine(line, ORCHESTRATOR_NAME, session.pendingToolCalls, session.seenToolUseIds, sessionId, session.seenMessageHashes)
     }
     session.replayNow = null

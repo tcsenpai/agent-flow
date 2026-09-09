@@ -563,7 +563,7 @@ export class SessionWatcher implements AgentSessionWatcher {
     if (sessionId) {
       const session = this.sessions.get(sessionId)
       if (session) {
-        return ((session.replayNow ?? Date.now()) - session.sessionStartTime) / 1000
+        return ((session.replayNow ?? Date.now()) - session.sessionStartTime - (session.compressedMs ?? 0)) / 1000
       }
     }
     return 0
