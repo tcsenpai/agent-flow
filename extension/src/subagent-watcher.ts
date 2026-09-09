@@ -23,6 +23,11 @@ const log = createLogger('SubagentWatcher')
 /** A subagent transcript written within this window counts as active on attach */
 const RECENT_SUBAGENT_WRITE_MS = 60 * 1000
 
+/** A spawned file-tailed subagent whose transcript has not been written for this
+ *  long is considered finished. Covers agents whose completion never reaches the
+ *  parent transcript (Workflow tool agents, killed runs). */
+const SUBAGENT_IDLE_COMPLETE_MS = 2 * 60 * 1000
+
 export interface SubagentWatcherDelegate extends PermissionDetectionDelegate {
   getSession(sessionId: string): WatchedSession | undefined
   resetInactivityTimer(sessionId: string): void
@@ -176,8 +181,20 @@ export function readSubagentNewLines(
   if (!state) return
 
   const result = readNewFileLines(filePath, state.fileSize)
-  if (!result) return
+  if (!result) {
+    // No new content: complete the agent if it has gone quiet for long enough
+    if (state.spawnEmitted && !state.completeEmitted) {
+      let idleMs = 0
+      try { idleMs = Date.now() - fs.statSync(filePath).mtimeMs } catch { return }
+      if (idleMs > SUBAGENT_IDLE_COMPLETE_MS) {
+        state.completeEmitted = true
+        delegate.emit({ time: delegate.elapsed(sessionId), type: 'agent_complete', payload: { name: state.agentName } }, sessionId)
+      }
+    }
+    return
+  }
   state.fileSize = result.newSize
+  state.completeEmitted = false
 
   // If inline progress events are handling this subagent, skip event emission
   // from the file watcher to avoid duplicates. We still advance fileSize above
