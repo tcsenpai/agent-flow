@@ -21,6 +21,7 @@ import {
   SYSTEM_CONTENT_PREFIXES,
   generateSubagentFallbackName,
   resolveSubagentChildName,
+  BACKFILL_TURNS,
 } from './constants'
 import { summarizeInput, summarizeResult, extractInputData, detectError, buildDiscovery } from './tool-summarizer'
 import { estimateTokensFromContent, estimateTokensFromText } from './token-estimator'
@@ -34,6 +35,18 @@ export interface TranscriptParserDelegate {
   getSession(sessionId: string): WatchedSession | undefined
   fireSessionLifecycle(event: { type: 'started' | 'ended' | 'updated'; sessionId: string; label: string }): void
   emitContextUpdate(agentName: string, session: WatchedSession, sessionId?: string): void
+}
+
+/** Wall-clock ms of a transcript line, without a full JSON parse. */
+function lineTimestamp(line: string | undefined): number | null {
+  const m = line?.match(/"timestamp":"([^"]+)"/)
+  const ts = m ? Date.parse(m[1]) : NaN
+  return Number.isNaN(ts) ? null : ts
+}
+
+/** ponytail: string sniff instead of JSON.parse — tool_result entries are also type "user", exclude them */
+function isUserTurnLine(line: string): boolean {
+  return line.includes('"type":"user"') && !line.includes('"tool_result"')
 }
 
 /** Type guard: check if a value is a non-null object */
@@ -423,20 +436,50 @@ export class TranscriptParser {
   }
 
   /**
-   * Pre-scan existing file content:
-   * 1. Build seenToolUseIds dedup set (prevents re-emitting old tool calls)
-   * 2. Return all entries for catch-up emission
+   * Split existing file content for session attach:
+   * - everything before the last BACKFILL_TURNS user turns is pre-scanned only
+   *   (dedup sets + token accounting, nothing emitted)
+   * - the tail is returned as raw lines for replayLines(), which runs them
+   *   through the live path so tool calls, subagents and messages show up
+   * Also pins the session clock to the first transcript entry so replayed and
+   * live events share a real timeline.
    */
-  prescanExistingContent(filePath: string, size: number, session: WatchedSession): TranscriptEntry[] {
-    if (size === 0) { return [] }
-    const catchUpEntries: TranscriptEntry[] = []
+  prepareBackfill(filePath: string, size: number, session: WatchedSession): { entries: TranscriptEntry[]; replayLines: string[] } {
+    if (size === 0) { return { entries: [], replayLines: [] } }
+    let lines: string[]
     try {
       // Read only up to `size` bytes — the file may have grown since stat.
       // Reading beyond would add tool_use IDs to the dedup set that haven't
       // been accounted for in fileSize, causing readNewLines to silently skip them.
-      const content = readFileChunk(filePath, 0, size)
-      for (const line of content.split(/\r?\n/)) {
-        if (!line.trim()) { continue }
+      lines = readFileChunk(filePath, 0, size).split(/\r?\n/).filter(l => l.trim())
+    } catch (err) {
+      log.error('Pre-scan failed:', err)
+      return { entries: [], replayLines: [] }
+    }
+    const firstTs = lineTimestamp(lines[0])
+    if (firstTs) { session.sessionStartTime = firstTs }
+    let split = lines.length
+    for (let i = lines.length - 1, turns = 0; i >= 0 && turns < BACKFILL_TURNS; i--) {
+      if (isUserTurnLine(lines[i])) { turns++; split = i }
+    }
+    return { entries: this.prescanLines(lines.slice(0, split), session), replayLines: lines.slice(split) }
+  }
+
+  /** Replay historical lines through the live path, with the session clock
+   *  pinned to each entry's own timestamp so durations and the timeline are real. */
+  replayLines(lines: string[], session: WatchedSession, sessionId: string): void {
+    for (const line of lines) {
+      session.replayNow = lineTimestamp(line)
+      this.processTranscriptLine(line, ORCHESTRATOR_NAME, session.pendingToolCalls, session.seenToolUseIds, sessionId, session.seenMessageHashes)
+    }
+    session.replayNow = null
+  }
+
+  /** Build dedup sets and accumulate token counts for lines that will NOT be emitted. */
+  private prescanLines(lines: string[], session: WatchedSession): TranscriptEntry[] {
+    const catchUpEntries: TranscriptEntry[] = []
+    {
+      for (const line of lines) {
         try {
           const entry = JSON.parse(line.trim()) as TranscriptEntry
           // Build dedup sets for tool_use blocks and messages + accumulate token counts
@@ -504,57 +547,8 @@ export class TranscriptParser {
         } catch (err) { log.debug('Skipping unparseable transcript line:', err) }
       }
       log.info(`Pre-scanned ${session.seenToolUseIds.size} existing tool_use IDs, ${catchUpEntries.length} entries total`)
-
-      return catchUpEntries
-    } catch (err) {
-      log.error('Pre-scan failed:', err)
-      return []
     }
-  }
-
-  /** Emit message events for pre-existing transcript entries (catch-up on session detection).
-   *  Only emits the last user message (the current turn), not the full history. */
-  emitCatchUpEntries(entries: TranscriptEntry[], session: WatchedSession, sessionId: string): void {
-    // Find the last user entry — that's the current turn
-    let lastUserIndex = -1
-    for (let i = entries.length - 1; i >= 0; i--) {
-      if (entries[i].type === 'user') { lastUserIndex = i; break }
-    }
-    if (lastUserIndex === -1) { return }
-    const recentEntries = entries.slice(lastUserIndex)
-
-    for (const entry of recentEntries) {
-      const role = entry.type === 'user' ? 'user' : 'assistant'
-      const msg = entry.message
-      if (!msg) { continue }
-
-      // String content (common for user messages)
-      if (typeof msg.content === 'string' && msg.content.trim()) {
-        const text = msg.content.trim()
-        if (this.isSystemInjectedContent(text)) { continue }
-        this.delegate.emit({
-          time: 0,
-          type: 'message',
-          payload: { agent: ORCHESTRATOR_NAME, role, content: text.slice(0, MESSAGE_MAX) },
-        }, sessionId)
-        continue
-      }
-
-      // Array content (text blocks, thinking blocks, tool_use blocks)
-      if (!Array.isArray(msg.content)) { continue }
-      for (const block of msg.content) {
-        if (block.type === 'text' && 'text' in block) {
-          const text = safeText(block)
-          if (text && !this.isSystemInjectedContent(text)) {
-            this.delegate.emit({
-              time: 0,
-              type: 'message',
-              payload: { agent: ORCHESTRATOR_NAME, role, content: text.slice(0, MESSAGE_MAX) },
-            }, sessionId)
-          }
-        }
-      }
-    }
+    return catchUpEntries
   }
 
   /** Extract a human-readable label from the first user message in transcript entries */

@@ -120,7 +120,7 @@ const sessions = new Map<string, WatchedSession>()
 function elapsed(sessionId?: string): number {
   if (sessionId) {
     const session = sessions.get(sessionId)
-    if (session) return (Date.now() - session.sessionStartTime) / 1000
+    if (session) return ((session.replayNow ?? Date.now()) - session.sessionStartTime) / 1000
   }
   return 0
 }
@@ -215,9 +215,9 @@ function watchSession(sessionId: string, filePath: string) {
   sessions.set(sessionId, session)
 
   const stat = fs.statSync(filePath)
-  const catchUpEntries = parser.prescanExistingContent(filePath, stat.size, session)
+  const { entries, replayLines } = parser.prepareBackfill(filePath, stat.size, session)
   session.fileSize = stat.size
-  parser.extractSessionLabel(catchUpEntries, session)
+  parser.extractSessionLabel(entries, session)
 
   broadcastSessionLifecycle('started', sessionId, session.label)
   broadcastEvent({
@@ -228,7 +228,7 @@ function watchSession(sessionId: string, filePath: string) {
   session.sessionDetected = true
 
   emitContextUpdate(ORCHESTRATOR_NAME, session, sessionId)
-  parser.emitCatchUpEntries(catchUpEntries, session, sessionId)
+  parser.replayLines(replayLines, session, sessionId)
 
   session.fileWatcher = fs.watch(filePath, (eventType) => {
     if (eventType === 'change') readNewLines(sessionId)
