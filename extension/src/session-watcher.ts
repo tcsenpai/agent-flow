@@ -568,7 +568,11 @@ export class SessionWatcher implements AgentSessionWatcher {
     if (sessionId) {
       const session = this.sessions.get(sessionId)
       if (session) {
-        return ((session.replayNow ?? Date.now()) - session.sessionStartTime - (session.compressedMs ?? 0)) / 1000
+        const raw = ((session.replayNow ?? Date.now()) - session.sessionStartTime - (session.compressedMs ?? 0)) / 1000
+        // Timer- and subagent-driven emitters read the clock between advanceClock() calls;
+        // clamp so no event is ever stamped earlier than the previous one
+        session.lastElapsed = Math.max(raw, session.lastElapsed ?? 0)
+        return session.lastElapsed
       }
     }
     return 0
@@ -576,6 +580,7 @@ export class SessionWatcher implements AgentSessionWatcher {
 
   /** Emit a context_update event with cumulative token breakdown */
   private emitContextUpdate(agentName: string, session: WatchedSession, sessionId?: string): void {
+    if (session.replayNow != null) return // one context_update is emitted after the replay instead of one per line
     const bd = session.contextBreakdown
     const total = bd.systemPrompt + bd.userMessages + bd.toolResults + bd.reasoning + bd.subagentResults
     this.emit({
