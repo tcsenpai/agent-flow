@@ -52,7 +52,8 @@ function pickMimeType(): { mime: string; ext: string } {
  * Records the whole timeline (from t=0 to the last event) as a video with the
  * simulation's sounds, by replaying it in real time through a MediaRecorder
  * fed from canvas.captureStream() + the AudioEngine's recording output.
- * Playback speed is whatever the simulation is set to.
+ * Playback speed is whatever the simulation is set to. A second click stops
+ * early and saves the partial recording.
  */
 /** Save a blob: native "Save as" dialog where available (user picks folder + name), otherwise a download */
 async function saveBlob(blob: Blob, suggestedName: string, ext: string): Promise<string> {
@@ -171,5 +172,6 @@ export function useTimelineExport(opts: ExportOptions) {
 
   useEffect(() => () => { cancelAnimationFrame(rafRef.current); recorderRef.current?.stop() }, [])
 
-  return { isExporting, progress, lastResult, startExport: start, cancelExport: () => stop(true) }
+  /** Stop early and save what was recorded so far */
+  return { isExporting, progress, lastResult, startExport: start, stopExport: () => stop(false) }
 }

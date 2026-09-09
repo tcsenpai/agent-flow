@@ -225,7 +225,7 @@ export function AgentVisualizer() {
   })
   useEffect(() => { setIsExporting(timelineExport.isExporting) }, [timelineExport.isExporting])
   const handleToggleExport = useCallback(() => {
-    if (timelineExport.isExporting) timelineExport.cancelExport()
+    if (timelineExport.isExporting) timelineExport.stopExport()
     else { setIsReviewing(true); timelineExport.startExport() }
   }, [timelineExport])
 
