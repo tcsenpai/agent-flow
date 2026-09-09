@@ -162,6 +162,8 @@ export interface SubagentState {
   permissionTimer: NodeJS.Timeout | null
   permissionEmitted: boolean
   spawnEmitted: boolean
+  /** agent_complete already emitted (file-tailed subagent went idle) */
+  completeEmitted?: boolean
 }
 
 /** State tracked for a single watched Claude Code session */
