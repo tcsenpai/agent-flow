@@ -33,12 +33,15 @@ export const ERRORS_WARN = 3
 export const ERRORS_BAD = 5
 export const CONSECUTIVE_ERRORS_BAD = 3
 
+/** Re-reading or re-searching the same thing is normal work, not a loop; only tools with effects or cost count */
+const LOOP_EXEMPT_TOOLS = new Set(['Read', 'Grep', 'Glob', 'LS'])
+
 export function assessHealth(recent: ToolRecord[]): SessionHealth {
   const window = recent.slice(-HEALTH_WINDOW)
 
   // Loops: most repeated signature in the window
   const counts = new Map<string, number>()
-  for (const r of window) counts.set(r.sig, (counts.get(r.sig) ?? 0) + 1)
+  for (const r of window) if (!LOOP_EXEMPT_TOOLS.has(r.tool)) counts.set(r.sig, (counts.get(r.sig) ?? 0) + 1)
   let maxRepeat = 0, repeatedSig = ''
   for (const [sig, n] of counts) if (n > maxRepeat) { maxRepeat = n; repeatedSig = sig }
 
