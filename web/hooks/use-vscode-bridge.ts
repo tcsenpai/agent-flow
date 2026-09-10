@@ -212,7 +212,9 @@ export function useVSCodeBridge(): BridgeHookResult {
           }
           return [...prev, session]
         })
-        // Auto-select newly started session.
+        // Auto-select only when nothing is selected yet: stealing focus every time
+        // another project starts a session is disruptive with many sessions.
+        if (selectedSessionIdRef.current) return
         // Set switch-pending flag to prevent the animation frame from processing
         // events in the wrong simulation state before useLayoutEffect swaps it.
         sessionSwitchPendingRef.current = true
