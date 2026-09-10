@@ -209,11 +209,6 @@ export function useVSCodeBridge(): BridgeHookResult {
         }
       } else if (type === 'started') {
         const session = data as SessionInfo
-        // Resume after inactivity re-sends 'started' for a session we may already
-        // be showing. Re-arming the switch for the same id would set
-        // sessionSwitchPendingRef without anything ever clearing it (the layout
-        // effect only runs when the selection changes), freezing event delivery.
-        const alreadySelected = session.id === selectedSessionIdRef.current
         setSessions(prev => {
           const existing = prev.find(s => s.id === session.id)
           if (existing) {
