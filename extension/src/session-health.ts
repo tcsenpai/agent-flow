@@ -36,12 +36,38 @@ export const CONSECUTIVE_ERRORS_BAD = 3
 /** Re-reading or re-searching the same thing is normal work, not a loop; only tools with effects or cost count */
 const LOOP_EXEMPT_TOOLS = new Set(['Read', 'Grep', 'Glob', 'LS'])
 
+/** Shell commands that only inspect state; a Bash call made only of these is treated like a Read */
+const READ_ONLY_COMMANDS = new Set([
+  'cd', 'ls', 'll', 'pwd', 'cat', 'head', 'tail', 'less', 'wc', 'grep', 'rg', 'egrep', 'fgrep', 'find', 'fd', 'tree',
+  'echo', 'printf', 'which', 'type', 'stat', 'file', 'du', 'df', 'ps', 'env', 'printenv', 'date', 'whoami', 'uname',
+  'sleep', 'true', 'test', '[', 'diff', 'sort', 'uniq', 'cut', 'awk', 'sed', 'jq', 'xargs', 'tr', 'basename', 'dirname',
+])
+const READ_ONLY_GIT = new Set(['status', 'log', 'diff', 'show', 'branch', 'remote', 'rev-parse', 'blame', 'describe', 'ls-files', 'stash list'])
+
+/** True when every segment of a shell command line starts with a read-only command (cd x && ls -la | grep foo) */
+export function isReadOnlyCommand(command: string): boolean {
+  const segments = command.split(/\s*(?:&&|\|\||;|\|)\s*/).map(s => s.trim()).filter(Boolean)
+  if (segments.length === 0) return false
+  return segments.every(seg => {
+    const words = seg.replace(/^(?:\w+=\S+\s+)+/, '').split(/\s+/) // drop leading VAR=value assignments
+    const cmd = (words[0] || '').replace(/^.*\//, '')                  // /usr/bin/cat → cat
+    if (cmd === 'git') return READ_ONLY_GIT.has(words[1] || '') || READ_ONLY_GIT.has(`${words[1]} ${words[2]}`)
+    return READ_ONLY_COMMANDS.has(cmd)
+  })
+}
+
+function isLoopExempt(r: ToolRecord): boolean {
+  if (LOOP_EXEMPT_TOOLS.has(r.tool)) return true
+  if (r.tool === 'Bash') return isReadOnlyCommand(r.sig.slice('Bash:'.length))
+  return false
+}
+
 export function assessHealth(recent: ToolRecord[]): SessionHealth {
   const window = recent.slice(-HEALTH_WINDOW)
 
   // Loops: most repeated signature in the window
   const counts = new Map<string, number>()
-  for (const r of window) if (!LOOP_EXEMPT_TOOLS.has(r.tool)) counts.set(r.sig, (counts.get(r.sig) ?? 0) + 1)
+  for (const r of window) if (!isLoopExempt(r)) counts.set(r.sig, (counts.get(r.sig) ?? 0) + 1)
   let maxRepeat = 0, repeatedSig = ''
   for (const [sig, n] of counts) if (n > maxRepeat) { maxRepeat = n; repeatedSig = sig }
 

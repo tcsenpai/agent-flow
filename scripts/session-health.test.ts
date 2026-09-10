@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { assessHealth, type ToolRecord } from '../extension/src/session-health'
+import { assessHealth, isReadOnlyCommand, type ToolRecord } from '../extension/src/session-health'
 
 const rec = (i: number, tool: string, args: string, error: boolean | null = false): ToolRecord => ({ id: String(i), tool, sig: `${tool}:${args}`, error })
 
@@ -36,4 +36,17 @@ test('pending calls do not count as errors and the window is bounded', () => {
   const now = Array.from({ length: 5 }, (_, i) => rec(100 + i, 'Read', `f${i}`, null))
   assert.equal(assessHealth([...old, ...now]).level, 'bad') // 15 of the old bash calls still inside the 20-window
   assert.equal(assessHealth(now).level, 'ok')
+})
+
+test('read-only shell commands are not loops, commands with effects are', () => {
+  assert.equal(isReadOnlyCommand('cd /tmp && ls -la | grep foo'), true)
+  assert.equal(isReadOnlyCommand('git status && git log --oneline -3'), true)
+  assert.equal(isReadOnlyCommand('FOO=1 cat file.txt'), true)
+  assert.equal(isReadOnlyCommand('cd /tmp && npm test'), false)
+  assert.equal(isReadOnlyCommand('git push origin main'), false)
+  assert.equal(isReadOnlyCommand('rm -rf build'), false)
+  const cds = Array.from({ length: 10 }, (_, i) => rec(i, 'Bash', 'cd /Users/x/proj && git status'))
+  assert.equal(assessHealth(cds).level, 'ok')
+  const tests = Array.from({ length: 6 }, (_, i) => rec(i, 'Bash', 'cd /Users/x/proj && npm test'))
+  assert.equal(assessHealth(tests).level, 'bad')
 })
