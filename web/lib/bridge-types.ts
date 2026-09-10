@@ -17,8 +17,6 @@ export interface SessionInfo {
   id: string
   label: string
   cwd?: string
-  /** Backend health verdict: ok / warn / bad plus a one-line reason */
-  health?: { level: 'ok' | 'warn' | 'bad'; reason: string }
   status: 'active' | 'completed'
   startTime: number
   lastActivityTime: number

@@ -131,12 +131,6 @@ export function useVSCodeBridge(): BridgeHookResult {
     // selectedSessionIdRef is updated synchronously (not via React state) so it's
     // always current even before React re-renders.
     const unsubEvent = bridge.onEvent((event: AgentEvent) => {
-      if (event.type === 'session_health' && event.sessionId) {
-        const sid = event.sessionId
-        const h = event.payload as { level: 'ok' | 'warn' | 'bad'; reason: string }
-        setSessions(prev => prev.map(s => s.id === sid ? { ...s, health: { level: h.level, reason: h.reason } } : s))
-        return
-      }
       if (event.type === 'file_collision') {
         // Global, not per-session: the same collision arrives once per involved session
         const p = event.payload as { file: string; parties: FileCollision['parties']; sessions: string[] }

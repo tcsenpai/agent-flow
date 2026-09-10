@@ -1,5 +1,3 @@
-import type { SessionHealth, ToolRecord } from './session-health'
-
 /**
  * Message protocol between VS Code extension host and webview.
  *
@@ -23,7 +21,6 @@ export type AgentEventType =
   | 'permission_requested'
   | 'file_collision'
   | 'context_compacted'
-  | 'session_health'
   | 'error'
 
 export interface AgentEvent {
@@ -38,7 +35,6 @@ export interface SessionInfo {
   label: string
   /** Working directory of the session (used to disambiguate tabs across projects) */
   cwd?: string
-  health?: SessionHealth
   status: 'active' | 'completed'
   startTime: number
   lastActivityTime: number
@@ -208,9 +204,6 @@ export interface WatchedSession {
   lastEventWall?: number
   /** Last value returned by elapsed(); events are never stamped earlier than this */
   lastElapsed?: number
-  /** Recent tool calls for the health verdict */
-  recentTools?: ToolRecord[]
-  health?: SessionHealth
   model: string | null
   /** Maps agent names to their last emitted model ID — re-emits on model change */
   modelDetectedAgents: Map<string, string>

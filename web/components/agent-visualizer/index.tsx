@@ -484,8 +484,13 @@ export function AgentVisualizer() {
         collisions={allCollisions}
         sessions={bridge.sessions}
         selectedSessionId={bridge.selectedSessionId}
+        agents={agents}
+        toolCalls={toolCalls}
+        fileAttention={fileAttention}
         onSelectSession={bridge.selectSession}
-        hidden={showFileAttention || showTranscript || showDeadLetters}
+        onOpenDeadLetters={() => toggleExclusivePanel('dead')}
+        onOpenFiles={() => toggleExclusivePanel('files')}
+        hidden={showFileAttention || showTranscript || showDeadLetters || bridge.useMockData}
       />
 
       {/* Top bar: session tabs + info/controls */}

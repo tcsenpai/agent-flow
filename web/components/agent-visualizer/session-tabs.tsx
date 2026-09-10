@@ -66,8 +66,6 @@ export function SessionTabs({
         // Green dot: session is active, OR has unseen background activity
         const showGreen = isActive || hasActivity
         const folder = showFolder && session.cwd ? folderName(session.cwd) : null
-        const health = session.health?.level ?? 'ok'
-        const dotColor = health === 'bad' ? COLORS.error : health === 'warn' ? COLORS.waiting_permission : showGreen ? COLORS.complete : COLORS.idle + '40'
         return (
           <button
             key={session.id}
@@ -78,7 +76,7 @@ export function SessionTabs({
               setDraft(customNames[session.id] ?? '')
               setEditingId(session.id)
             }}
-            title={`${session.health?.reason ? '⚠ ' + session.health.reason + '\n' : ''}${session.cwd ?? ''}\n${session.label}\nRight-click to rename`}
+            title={`${session.cwd ?? ''}\n${session.label}\nRight-click to rename`}
             className="group px-2.5 py-1 rounded-md transition-all flex items-center gap-2 font-mono text-[11px]"
             style={{
               flexShrink: 0,
@@ -94,8 +92,8 @@ export function SessionTabs({
             <span
               className="inline-block w-2 h-2 rounded-full flex-shrink-0"
               style={{
-                background: dotColor,
-                boxShadow: showGreen || health !== 'ok' ? `0 0 6px ${dotColor}` : 'none',
+                background: showGreen ? COLORS.complete : COLORS.idle + '40',
+                boxShadow: showGreen ? `0 0 6px ${COLORS.complete}` : 'none',
                 animation: hasActivity && !isSelected ? 'pulse 1.5s infinite' : 'none',
               }}
             />

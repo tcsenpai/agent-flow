@@ -95,7 +95,6 @@ export class SessionWatcher implements AgentSessionWatcher {
       id: s.sessionId,
       label: s.label,
       cwd: s.cwd,
-      health: s.health,
       status: s.sessionCompleted ? 'completed' : 'active',
       startTime: s.sessionStartTime,
       lastActivityTime: s.lastActivityTime,
