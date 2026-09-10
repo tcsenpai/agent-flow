@@ -27,6 +27,7 @@ import {
 import { summarizeInput, summarizeResult, extractInputData, detectError, buildDiscovery } from './tool-summarizer'
 import { estimateTokensFromContent, estimateTokensFromText } from './token-estimator'
 import { createLogger } from './logger'
+import { fileCollisions, touchAction } from './file-collisions'
 
 const log = createLogger('TranscriptParser')
 
@@ -305,6 +306,8 @@ export class TranscriptParser {
       startTime: Date.now(),
     })
 
+    if (filePath && sessionId) this.detectFileCollision(filePath, toolName, agentName, sessionId)
+
     // Check if this is a subagent call (Task in older Claude Code, Agent in newer versions)
     if (toolName === 'Task' || toolName === 'Agent') {
       const childName = resolveSubagentChildName(block.input)
@@ -328,6 +331,23 @@ export class TranscriptParser {
         inputData: extractInputData(toolName, block.input),
       },
     }, sessionId)
+  }
+
+  /** Report when this touch completes a same-file collision with another agent or session */
+  private detectFileCollision(filePath: string, toolName: string, agentName: string, sessionId: string): void {
+    const session = this.delegate.getSession(sessionId)
+    const wall = session?.replayNow ?? Date.now()
+    const collision = fileCollisions.touch(filePath, { sessionId, agent: agentName, action: touchAction(toolName), wall })
+    if (!collision) return
+    const sessions = [...new Set(collision.parties.map(p => p.sessionId))]
+    // Every involved session gets the event so each canvas/tab can show it
+    for (const sid of sessions) {
+      this.delegate.emit({
+        time: this.delegate.elapsed(sid),
+        type: 'file_collision',
+        payload: { file: collision.file, parties: collision.parties, sessions },
+      }, sid)
+    }
   }
 
   handleToolResult(
