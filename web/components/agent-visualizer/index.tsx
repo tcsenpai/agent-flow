@@ -29,6 +29,7 @@ import { shouldShowFolder } from '@/lib/session-label'
 import { AUTOFIT_PREF_KEY } from "@/lib/canvas-constants"
 import { useTimelineExport } from "@/hooks/use-timeline-export"
 import { CollisionStrip } from "./collision-strip"
+import { DeadLetterPanel } from "./dead-letter-panel"
 import { useAudioEffects } from "@/hooks/use-audio-effects"
 
 export function AgentVisualizer() {
@@ -79,9 +80,11 @@ export function AgentVisualizer() {
   const [showSessionManager, setShowSessionManager] = useState(false)
   const { names: sessionNames, rename: renameSession } = useSessionNames()
   const showFolder = shouldShowFolder(bridge.sessions, bridge.isVSCode)
+  const [showDeadLetters, setShowDeadLetters] = useState(false)
 
   // Mutually exclusive panel toggling — opening one closes the others
-  const toggleExclusivePanel = useCallback((panel: 'files' | 'transcript' | 'cost') => {
+  const toggleExclusivePanel = useCallback((panel: 'files' | 'transcript' | 'cost' | 'dead') => {
+    setShowDeadLetters(prev => panel === 'dead' ? !prev : false)
     setShowFileAttention(prev => panel === 'files' ? !prev : false)
     setShowTranscript(prev => panel === 'transcript' ? !prev : false)
     setShowCostOverlay(prev => panel === 'cost' ? !prev : false)
@@ -305,6 +308,7 @@ export function AgentVisualizer() {
   }, [bridge])
 
   const isEmpty = agents.size === 0 && !bridge.useMockData
+  const deadLetterCount = useMemo(() => { let n = 0; for (const tc of toolCalls.values()) if (tc.state === 'error') n++; return n }, [toolCalls])
 
   // Collisions touching this session: trails between the local agents involved
   const allCollisions = useMemo(() => Array.from(bridge.collisions.values()), [bridge.collisions])
@@ -446,6 +450,13 @@ export function AgentVisualizer() {
       />
 
       {/* File attention panel (slide-in from right) */}
+      <DeadLetterPanel
+        visible={showDeadLetters}
+        toolCalls={toolCalls}
+        onClose={() => setShowDeadLetters(false)}
+        onSelectToolCall={selection.handleToolCallClick}
+      />
+
       <FileAttentionPanel
         visible={showFileAttention}
         fileAttention={fileAttention}
@@ -493,6 +504,8 @@ export function AgentVisualizer() {
         totalTokens={totalTokens}
         showFileAttention={showFileAttention}
         showTranscript={showTranscript}
+        showDeadLetters={showDeadLetters}
+        deadLetterCount={deadLetterCount}
         showCostOverlay={showCostOverlay}
         showTimeline={showTimeline}
         isMuted={isMuted}

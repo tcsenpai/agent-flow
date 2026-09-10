@@ -165,6 +165,7 @@ export interface SimulationEvent {
     | 'subagent_return'
     | 'permission_requested'
     | 'file_collision'
+    | 'context_compacted'
   payload: Record<string, unknown>
   sessionId?: string
 }
