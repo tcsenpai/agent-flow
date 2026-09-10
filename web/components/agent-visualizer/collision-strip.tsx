@@ -11,13 +11,13 @@ interface CollisionStripProps {
   onSelectSession: (id: string) => void
 }
 
-/** Cross-session same-file collisions, shown under the top bar. Click a session chip to jump to it. */
+/** Cross-session same-file collisions, stacked bottom-left so they never cover tabs or the control bar. Click a session chip to jump to it. */
 export function CollisionStrip({ collisions, sessions, selectedSessionId, onSelectSession }: CollisionStripProps) {
   const cross = collisions.filter(c => c.sessions.length > 1)
   if (cross.length === 0) return null
   const nameOf = (id: string) => sessions.find(x => x.id === id)?.label ?? id.slice(0, 8)
   return (
-    <div className="absolute left-3 right-3 flex flex-wrap gap-2 font-mono text-[10px]" style={{ top: 44, zIndex: Z.info }}>
+    <div className="absolute flex flex-col items-start gap-2 font-mono text-[10px]" style={{ left: 12, bottom: 16, maxWidth: '40vw', zIndex: Z.info }}>
       {cross.map(c => (
         <div
           key={c.file}

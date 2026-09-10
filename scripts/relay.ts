@@ -535,7 +535,7 @@ export async function createRelay(options: RelayOptions): Promise<Relay> {
       for (const session of sessions.values()) {
         if (!session.sessionDetected) continue
         sessionList.push({
-          id: session.sessionId, label: session.label, cwd: session.cwd,
+          id: session.sessionId, label: session.label, cwd: session.cwd, health: session.health,
           status: session.sessionCompleted ? 'completed' : 'active',
           startTime: session.sessionStartTime, lastActivityTime: session.lastActivityTime,
         })

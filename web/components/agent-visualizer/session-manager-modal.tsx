@@ -133,6 +133,11 @@ export function SessionManagerModal({
                     <div className="truncate" style={{ color: COLORS.textMuted, opacity: 0.6, fontSize: 9 }}>
                       {session.cwd ? `${folderName(session.cwd)} · ${session.cwd}` : session.id.slice(0, 8)}
                     </div>
+                    {session.health && session.health.level !== 'ok' && (
+                      <div className="truncate" style={{ color: session.health.level === 'bad' ? COLORS.error : COLORS.waiting_permission, fontSize: 9 }}>
+                        ⚠ {session.health.reason}
+                      </div>
+                    )}
                   </div>
                   <span className="flex-shrink-0" style={{ color: COLORS.textMuted, fontSize: 9 }}>
                     {session.status === 'active' ? 'active' : 'done'} · {ago(session.lastActivityTime)}

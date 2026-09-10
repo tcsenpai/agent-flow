@@ -153,6 +153,12 @@ export const TopBar = memo(function TopBar({
 
       {/* Right-side info/controls */}
       <div className="flex items-center gap-4 flex-shrink-0" style={{ color: COLORS.textMuted }}>
+        {(() => {
+          const h = sessions.find(s => s.id === selectedSessionId)?.health
+          if (!h || h.level === 'ok') return null
+          const color = h.level === 'bad' ? COLORS.error : COLORS.waiting_permission
+          return <span title={h.reason} style={{ color, maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>⚠ {h.reason}</span>
+        })()}
         {isVSCode && <ConnectionIndicator status={connectionStatus} />}
         <span>{agentCount} agents</span>
         <span>

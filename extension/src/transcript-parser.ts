@@ -28,6 +28,7 @@ import { summarizeInput, summarizeResult, extractInputData, detectError, buildDi
 import { estimateTokensFromContent, estimateTokensFromText } from './token-estimator'
 import { createLogger } from './logger'
 import { fileCollisions, touchAction } from './file-collisions'
+import { assessHealth, HEALTH_WINDOW } from './session-health'
 
 const log = createLogger('TranscriptParser')
 
@@ -331,6 +332,14 @@ export class TranscriptParser {
 
     if (filePath && sessionId) this.detectFileCollision(filePath, toolName, agentName, sessionId)
 
+    if (sessionId && toolName !== 'Task' && toolName !== 'Agent') {
+      const session = this.delegate.getSession(sessionId)
+      if (session) {
+        session.recentTools = [...(session.recentTools ?? []), { id: block.id, tool: toolName, sig: `${toolName}:${args}`, error: null }].slice(-HEALTH_WINDOW * 2)
+        this.updateHealth(session, sessionId)
+      }
+    }
+
     // Check if this is a subagent call (Task in older Claude Code, Agent in newer versions)
     if (toolName === 'Task' || toolName === 'Agent') {
       const childName = resolveSubagentChildName(block.input)
@@ -354,6 +363,15 @@ export class TranscriptParser {
         inputData: extractInputData(toolName, block.input),
       },
     }, sessionId)
+  }
+
+  /** Recompute the session health verdict; emit only when the verdict changes */
+  private updateHealth(session: WatchedSession, sessionId: string): void {
+    const h = assessHealth(session.recentTools ?? [])
+    log.debug(`health ${sessionId.slice(0, 8)}: ${h.level} repeat=${h.metrics.maxRepeat} errors=${h.metrics.recentErrors} consecutive=${h.metrics.consecutiveErrors}`)
+    if (session.health && session.health.level === h.level && session.health.reason === h.reason) return
+    session.health = h
+    this.delegate.emit({ time: this.delegate.elapsed(sessionId), type: 'session_health', payload: { ...h } }, sessionId)
   }
 
   /** Report when this touch completes a same-file collision with another agent or session */
@@ -395,6 +413,8 @@ export class TranscriptParser {
         } else {
           session.contextBreakdown.toolResults += tokenCost
         }
+        const rec = session.recentTools?.find(r => r.id === block.tool_use_id)
+        if (rec) { rec.error = detectError(result); this.updateHealth(session, sessionId) }
       }
     }
 

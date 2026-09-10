@@ -166,6 +166,7 @@ export interface SimulationEvent {
     | 'permission_requested'
     | 'file_collision'
     | 'context_compacted'
+    | 'session_health'
   payload: Record<string, unknown>
   sessionId?: string
 }
