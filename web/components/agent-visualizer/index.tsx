@@ -28,6 +28,7 @@ import { useSessionNames } from '@/hooks/use-session-names'
 import { shouldShowFolder } from '@/lib/session-label'
 import { AUTOFIT_PREF_KEY } from "@/lib/canvas-constants"
 import { useTimelineExport } from "@/hooks/use-timeline-export"
+import { CollisionStrip } from "./collision-strip"
 import { useAudioEffects } from "@/hooks/use-audio-effects"
 
 export function AgentVisualizer() {
@@ -305,6 +306,23 @@ export function AgentVisualizer() {
 
   const isEmpty = agents.size === 0 && !bridge.useMockData
 
+  // Collisions touching this session: trails between the local agents involved
+  const allCollisions = useMemo(() => Array.from(bridge.collisions.values()), [bridge.collisions])
+  const canvasCollisions = useMemo(() => {
+    const sid = bridge.selectedSessionId
+    if (!sid) return []
+    const now = Date.now()
+    return allCollisions
+      .filter(c => c.sessions.includes(sid))
+      .map(c => ({
+        file: c.file,
+        agents: [...new Set(c.parties.filter(p => p.sessionId === sid).map(p => p.agent))],
+        crossSession: c.sessions.length > 1,
+        freshness: Math.max(0, 1 - (now - c.seenAt) / 90_000),
+      }))
+      .filter(c => c.agents.length >= 2)
+  }, [allCollisions, bridge.selectedSessionId])
+
   return (
     <OpenFileProvider value={bridge.isVSCode ? openFile : null}>
     <div className="h-screen w-screen relative overflow-hidden" style={{ background: COLORS.void }}>
@@ -338,6 +356,7 @@ export function AgentVisualizer() {
         selectedDiscoveryId={selection.selectedDiscoveryId}
         showCostOverlay={showCostOverlay}
         overlayText={exportOverlay}
+        collisions={canvasCollisions}
       />
 
       {/* Message feed panel (top-left) */}
@@ -448,6 +467,13 @@ export function AgentVisualizer() {
         timelineEntries={timelineEntries}
         currentTime={currentTime}
         onClose={() => setShowTimeline(false)}
+      />
+
+      <CollisionStrip
+        collisions={allCollisions}
+        sessions={bridge.sessions}
+        selectedSessionId={bridge.selectedSessionId}
+        onSelectSession={bridge.selectSession}
       />
 
       {/* Top bar: session tabs + info/controls */}

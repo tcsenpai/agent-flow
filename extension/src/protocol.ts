@@ -19,6 +19,7 @@ export type AgentEventType =
   | 'subagent_dispatch'
   | 'subagent_return'
   | 'permission_requested'
+  | 'file_collision'
   | 'error'
 
 export interface AgentEvent {

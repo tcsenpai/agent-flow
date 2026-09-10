@@ -4,6 +4,7 @@ import { useRef, useEffect, useState, useCallback } from 'react'
 import { Agent, Particle, Edge, Discovery, DepthParticle } from '@/lib/agent-types'
 import type { SimulationState } from '@/hooks/simulation/types'
 import { getStateColor, COLORS } from '@/lib/colors'
+import { drawCollisions, type CanvasCollision } from './canvas/draw-collisions'
 import { ANIM_SPEED, PERF_OVERLAY, PERF_OVERLAY_ENABLED } from '@/lib/canvas-constants'
 import { BloomRenderer } from './bloom-renderer'
 import { createDepthParticles, updateDepthParticles, drawBackground } from './background-layer'
@@ -44,6 +45,8 @@ interface CanvasProps {
   showCostOverlay?: boolean
   /** Full-canvas caption (e.g. '… 3m later …' during an export); drawn into the canvas so captureStream sees it */
   overlayText?: string | null
+  /** Same-file collisions involving agents of this session */
+  collisions?: CanvasCollision[]
 }
 
 export function AgentCanvas({
@@ -51,6 +54,7 @@ export function AgentCanvas({
   selectedAgentId, hoveredAgentId, showStats, showHexGrid, zoomToFitTrigger, pauseAutoFit, autoFit,
   onAgentClick, onAgentHover, onAgentDrag, onContextMenu, onToolCallClick, selectedToolCallId, onDiscoveryClick, selectedDiscoveryId, showCostOverlay,
   overlayText,
+  collisions,
 }: CanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mainCanvasRef = useRef<HTMLCanvasElement>(null)
@@ -97,7 +101,7 @@ export function AgentCanvas({
     agents: sim.agents, toolCalls: sim.toolCalls,
     particles: sim.particles, edges: sim.edges, discoveries: sim.discoveries,
     selectedAgentId, hoveredAgentId, showStats, showHexGrid,
-    showCostOverlay, selectedToolCallId, selectedDiscoveryId, overlayText,
+    showCostOverlay, selectedToolCallId, selectedDiscoveryId, overlayText, collisions,
     simTime: sim.currentTime, pauseAutoFit, dimensions,
     onAgentDrag, onAgentClick, onAgentHover, onContextMenu,
     onToolCallClick, onDiscoveryClick,
@@ -271,6 +275,7 @@ export function AgentCanvas({
 
       drawDiscoveryConnections(ctx, discoveries, agents)
       drawEdges(ctx, edges, agents, toolCalls, activeEdgeIds, timeRef.current)
+      if (drawPropsRef.current.collisions?.length) drawCollisions(ctx, drawPropsRef.current.collisions, agents, timeRef.current)
       drawToolCalls(ctx, toolCalls, timeRef.current, selectedToolCallId)
       drawDiscoveries(ctx, discoveries, agents, selectedDiscoveryId)
       drawAgents(ctx, agents, selectedAgentId, hoveredAgentId, showStats, timeRef.current)
