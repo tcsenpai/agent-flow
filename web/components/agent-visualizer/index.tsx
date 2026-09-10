@@ -28,7 +28,7 @@ import { useSessionNames } from '@/hooks/use-session-names'
 import { shouldShowFolder } from '@/lib/session-label'
 import { AUTOFIT_PREF_KEY } from "@/lib/canvas-constants"
 import { useTimelineExport } from "@/hooks/use-timeline-export"
-import { CollisionStrip } from "./collision-strip"
+import { StatusSidebar } from "./status-sidebar"
 import { DeadLetterPanel } from "./dead-letter-panel"
 import { useAudioEffects } from "@/hooks/use-audio-effects"
 
@@ -480,11 +480,12 @@ export function AgentVisualizer() {
         onClose={() => setShowTimeline(false)}
       />
 
-      <CollisionStrip
+      <StatusSidebar
         collisions={allCollisions}
         sessions={bridge.sessions}
         selectedSessionId={bridge.selectedSessionId}
         onSelectSession={bridge.selectSession}
+        hidden={showFileAttention || showTranscript || showDeadLetters}
       />
 
       {/* Top bar: session tabs + info/controls */}
